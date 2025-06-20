@@ -1,0 +1,58 @@
+# マルチステージビルド: 依存関係ステージ
+FROM python:3.11-alpine AS dependencies
+
+# セキュリティ: 非rootユーザー作成
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
+
+# 必要なビルドツールをインストール（単一レイヤーで最適化）
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    linux-headers \
+    g++ \
+    && rm -rf /var/cache/apk/*
+
+WORKDIR /app
+
+# 依存関係ファイルのみを先にコピー（キャッシュ最適化）
+COPY requirements.txt .
+
+# Python依存関係をインストール（キャッシュ効率化）
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# 実行ステージ
+FROM python:3.11-alpine AS production
+
+# セキュリティ: 非rootユーザー作成
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
+
+# ランタイム依存関係のみインストール（最小限）
+RUN apk add --no-cache \
+    libstdc++ \
+    && rm -rf /var/cache/apk/*
+
+WORKDIR /app
+
+# 依存関係ステージからPythonパッケージをコピー
+COPY --from=dependencies /root/.local /home/appuser/.local
+
+# アプリケーションコードをコピー（所有権も設定）
+COPY --chown=appuser:appgroup *.py ./
+
+# 非rootユーザーに切り替え
+USER appuser
+
+# PATHを更新
+ENV PATH=/home/appuser/.local/bin:$PATH
+
+# ポート公開
+EXPOSE 8000
+
+# ヘルスチェック追加
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+
+# FastAPIアプリケーションを起動
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
