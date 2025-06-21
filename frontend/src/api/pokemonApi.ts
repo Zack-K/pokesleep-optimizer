@@ -78,9 +78,69 @@ export const pokemonApi = {
     return response.data;
   },
 
-  // パーティ最適化実行
+  // パーティ最適化実行（従来の総当たり）
   async optimizeParty(request: OptimizationRequest): Promise<any> {
     const response = await api.post('/api/v1/pokemon/optimize', request);
+    return response.data;
+  },
+
+  // 遺伝的アルゴリズム最適化
+  async optimizePartyGenetic(request: OptimizationRequest): Promise<{
+    optimization_method: string;
+    party_names: string[];
+    fitness: number;
+    total_energy: number;
+    daily_energy: number;
+    generations_completed: number;
+    convergence_history: any[];
+    population_stats: any;
+  }> {
+    const response = await api.post('/api/v1/pokemon/optimize-genetic', request);
+    return response.data;
+  },
+
+  // マルチ目的最適化
+  async optimizePartyMultiObjective(
+    request: OptimizationRequest,
+    optimizationType: 'balanced' | 'energy_focused' | 'recipe_focused' = 'balanced'
+  ): Promise<{
+    optimization_method: string;
+    optimization_type: string;
+    pareto_front: Array<[string[], number[]]>;
+    best_compromise: {
+      party: string[];
+      objectives: number[];
+      scalarized_value: number;
+    };
+    objective_names: string[];
+    generations_completed: number;
+    party_names: string[];
+    objectives: number[];
+  }> {
+    const response = await api.post('/api/v1/pokemon/optimize-multi-objective', request, {
+      params: {
+        optimization_type: optimizationType
+      }
+    });
+    return response.data;
+  },
+
+  // ベンチマーク実行
+  async benchmarkOptimization(
+    request: OptimizationRequest,
+    methods: string[] = ['brute_force', 'genetic', 'multi_objective'],
+    runsPerMethod: number = 3
+  ): Promise<{
+    benchmark_results: any[];
+    performance_report: any;
+    test_parameters: any;
+  }> {
+    const benchmarkRequest = {
+      request: request,
+      methods: methods,
+      runs_per_method: runsPerMethod
+    };
+    const response = await api.post('/api/v1/pokemon/benchmark', benchmarkRequest);
     return response.data;
   },
 

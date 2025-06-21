@@ -32,7 +32,7 @@ export interface SimulationResult {
   recipe_energy: number;
   daily_energy: number;
   ingredients: Record<string, number>;
-  recipes_made: string[];
+  recipes_made: Record<string, any>;
 }
 
 export interface OptimizationRequest {

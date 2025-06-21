@@ -45,7 +45,8 @@ class Pokemon:
         level: int = 1,
         nature: Optional[PokemonNature] = None,
         sub_skill: Optional[PokemonSubSkill] = None,
-        ribbon: int = 0
+        ribbon: int = 0,
+        base_data: Optional[Dict[str, Any]] = None
     ):
         """
         ポケモンインスタンスの初期化
@@ -56,18 +57,20 @@ class Pokemon:
             nature: 性格補正
             sub_skill: サブスキル
             ribbon: リボン数
+            base_data: 基本データ（省略時は POKEMON_BASE_DATA から取得）
         """
-        if name not in POKEMON_BASE_DATA:
-            raise ValueError(f"不明なポケモン名: {name}")
-            
         self.name = name
         self.level = max(1, min(100, level))
         self.nature = nature or PokemonNature()
         self.sub_skill = sub_skill or PokemonSubSkill()
         self.ribbon = max(0, ribbon)
         
-        # 基本データの読み込み
-        base_data = POKEMON_BASE_DATA[name]
+        # 基本データの取得
+        if base_data is None:
+            if name not in POKEMON_BASE_DATA:
+                raise ValueError(f"不明なポケモン名: {name}")
+            base_data = POKEMON_BASE_DATA[name]
+        
         self.kind = base_data["kind"]
         self.type = base_data["type"]
         self.base_freq = base_data["freq"]
@@ -76,9 +79,15 @@ class Pokemon:
         self.main_skill = base_data["main_skill"]
         
         # 確率データの読み込み
-        prob_data = PROBABILITY.get(name, {"skill": 0.0, "ingr": 0.0})
-        self.base_skill_prob = prob_data["skill"] / 100.0
-        self.base_ingr_prob = prob_data["ingr"] / 100.0
+        # base_dataから確率データを取得（pokes.pyからのデータを優先）
+        if "skill_probability" in base_data and "ingredient_probability" in base_data:
+            self.base_skill_prob = base_data["skill_probability"]
+            self.base_ingr_prob = base_data["ingredient_probability"]
+        else:
+            # フォールバック: constants.pyのPROBABILITYデータ
+            prob_data = PROBABILITY.get(name, {"skill": 0.0, "ingr": 0.0})
+            self.base_skill_prob = prob_data["skill"] / 100.0
+            self.base_ingr_prob = prob_data["ingr"] / 100.0
         
         # インベントリサイズ
         self.base_inventory = INVENTORY.get(name, 10)
@@ -132,11 +141,49 @@ class Pokemon:
     @property 
     def berry_energy(self) -> int:
         """きのみエナジーの取得"""
-        return BERRY.get(self.berry, 0)
+        # まずdefine.pyからの正確なデータを使用する
+        try:
+            from define import BERRY as DEFINE_BERRY
+            return DEFINE_BERRY.get(self.berry, 0)
+        except ImportError:
+            # フォールバック: constants.pyのデータを使用
+            # ベリー名の不一致を修正するマッピング
+            berry_mapping = {
+                "ウブ": "ウブのみ",
+                "マゴ": "マゴのみ",
+                "オレン": "オレンのみ",
+                "オボン": "オボンのみ",
+                "ヒメリ": "ヒメリのみ",
+                "フィラ": "フィラのみ",
+                "ウイ": "ウイのみ",
+                "バンジ": "バンジのみ",
+                "イア": "イアのみ",
+                "ラム": "ラムのみ",
+                "シーヤ": "シーヤのみ",
+                "カゴ": "カゴのみ",
+                "ドリ": "ドリのみ",
+                "ベリブ": "ベリブのみ",
+                "ヤチェ": "ヤチェのみ",
+                "クラボ": "クラボのみ",
+                "カムラ": "カムラのみ",
+                "ヨプ": "ヨプのみ",
+                "ザロク": "ザロクのみ",
+                "チーゴ": "チーゴのみ",
+            }
+            
+            # ベリー名の変換を試行
+            mapped_berry = berry_mapping.get(self.berry, self.berry)
+            return BERRY.get(mapped_berry, 0)
     
     def get_ingredient_energy(self, ingredient: str) -> int:
         """指定食材のエナジー値を取得"""
-        return FOOD.get(ingredient, 0)
+        # まずdefine.pyからの正確なデータを使用する
+        try:
+            from define import FOOD as DEFINE_FOOD
+            return DEFINE_FOOD.get(ingredient, 0)
+        except ImportError:
+            # フォールバック: constants.pyのデータを使用
+            return FOOD.get(ingredient, 0)
     
     def get_total_ingredient_energy(self) -> int:
         """全食材の合計エナジー値を取得"""

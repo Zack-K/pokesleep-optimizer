@@ -83,6 +83,60 @@ class PokemonDataManager:
         """利用可能なポケモン名のリストを取得"""
         return self._available_pokemon.copy()
     
+    def get_optimizable_pokemon_names(self) -> List[str]:
+        """最適化可能なポケモン名一覧を取得（基本データが存在するもののみ）"""
+        from ..core.constants import POKEMON_BASE_DATA
+        
+        # 基本データが存在するポケモンを優先
+        optimizable = []
+        
+        for name in self._available_pokemon:
+            if name in POKEMON_BASE_DATA:
+                # 基本データ存在: そのまま追加
+                optimizable.append(name)
+            elif self._can_generate_base_data(name):
+                # 基本データ生成可能: 追加
+                optimizable.append(name)
+        
+        # 最低限のポケモンが確保できない場合はフォールバック
+        if len(optimizable) < 10:
+            logger.warning(f"最適化可能ポケモンが少なすぎます ({len(optimizable)}体). フォールバック実行")
+            return self._get_fallback_pokemon_names()
+        
+        logger.info(f"最適化可能ポケモン: {len(optimizable)}体")
+        return optimizable
+    
+    def _can_generate_base_data(self, name: str) -> bool:
+        """基本データが生成可能かチェック"""
+        if name not in self._pokemon_data:
+            return False
+        
+        pokemon_data = self._pokemon_data[name]
+        required_fields = ['kind', 'type', 'frequency', 'berry', 'ingredients', 'main_skill']
+        
+        return all(field in pokemon_data and pokemon_data[field] is not None 
+                  for field in required_fields)
+    
+    def _get_fallback_pokemon_names(self) -> List[str]:
+        """フォールバック用の基本ポケモン名リスト"""
+        from ..core.constants import POKEMON_BASE_DATA
+        
+        # 基本データが存在するポケモンを最優先
+        base_pokemon = list(POKEMON_BASE_DATA.keys())
+        
+        if len(base_pokemon) >= 10:
+            return base_pokemon[:20]  # 最大20体に制限
+        
+        # 基本データが不足している場合、生成可能なものを追加
+        additional = []
+        for name in self._available_pokemon:
+            if name not in base_pokemon and self._can_generate_base_data(name):
+                additional.append(name)
+                if len(base_pokemon) + len(additional) >= 15:
+                    break
+        
+        return base_pokemon + additional
+    
     def get_pokemon_count(self) -> int:
         """利用可能なポケモンの数を取得"""
         return len(self._available_pokemon)
@@ -91,6 +145,48 @@ class PokemonDataManager:
         """ポケモン名の有効性をチェック"""
         return name in self._pokemon_data
     
+    def get_or_generate_base_data(self, name: str) -> Dict[str, Any]:
+        """基本データを取得、なければ動的生成"""
+        from ..core.constants import POKEMON_BASE_DATA
+        
+        # 既存の基本データをチェック
+        if name in POKEMON_BASE_DATA:
+            return POKEMON_BASE_DATA[name]
+        
+        # 実データから基本データを生成
+        if name in self._pokemon_data:
+            pokemon_data = self._pokemon_data[name]
+            return self._generate_base_data_from_real_data(pokemon_data)
+        
+        # 最終フォールバック: デフォルト基本データ
+        logger.warning(f"ポケモン '{name}' の基本データを生成できません。デフォルト値を使用。")
+        return self._get_default_base_data()
+    
+    def _generate_base_data_from_real_data(self, pokemon_data: Dict[str, Any]) -> Dict[str, Any]:
+        """実データから基本データを生成"""
+        return {
+            "kind": pokemon_data.get("kind", 1),
+            "type": pokemon_data.get("type", "きのみ"),
+            "freq": pokemon_data.get("frequency", 3000),
+            "berry": pokemon_data.get("berry", "オレンのみ"),
+            "ingr": pokemon_data.get("ingredients", ["エッグ", "ミルク", "リンゴ"]),
+            "main_skill": pokemon_data.get("main_skill", 1),
+            # 確率データも含める
+            "skill_probability": pokemon_data.get("skill_probability", 0.0),
+            "ingredient_probability": pokemon_data.get("ingredient_probability", 0.0),
+        }
+    
+    def _get_default_base_data(self) -> Dict[str, Any]:
+        """デフォルト基本データ"""
+        return {
+            "kind": 1,  # ノーマル
+            "type": "きのみ",
+            "freq": 3000,
+            "berry": "オレンのみ",
+            "ingr": ["エッグ", "ミルク", "リンゴ"],
+            "main_skill": 1,
+        }
+
     def create_pokemon(
         self,
         name: str,
@@ -115,8 +211,11 @@ class PokemonDataManager:
         Raises:
             ValueError: 不正なポケモン名の場合
         """
-        if not self.is_valid_pokemon_name(name):
-            raise ValueError(f"不明なポケモン名: {name}")
+        # 基本データの取得または生成を試行
+        try:
+            base_data = self.get_or_generate_base_data(name)
+        except Exception as e:
+            raise ValueError(f"ポケモン '{name}' のデータを取得できません: {e}")
         
         # 性格データの変換
         pokemon_nature = None
@@ -148,7 +247,8 @@ class PokemonDataManager:
             level=level,
             nature=pokemon_nature,
             sub_skill=pokemon_sub_skill,
-            ribbon=ribbon
+            ribbon=ribbon,
+            base_data=base_data
         )
     
     def get_default_pokemon(self, name: str) -> Pokemon:

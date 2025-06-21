@@ -46,11 +46,13 @@ const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) => {
     );
   }
 
-  // 食材データをグラフ用に変換
-  const ingredientData = Object.entries(result.ingredients).map(([name, amount]) => ({
-    name,
-    amount: parseFloat(amount.toFixed(1))
-  }));
+  // 食材データをグラフ用に変換（0以上の値のみ）
+  const ingredientData = Object.entries(result.ingredients)
+    .filter(([name, amount]) => amount > 0)
+    .map(([name, amount]) => ({
+      name,
+      amount: parseFloat(amount.toFixed(1))
+    }));
 
   return (
     <Box>
@@ -105,21 +107,27 @@ const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) => {
             <Typography variant="h6" gutterBottom>
               獲得食材
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={ingredientData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="name" 
-                  angle={-45}
-                  textAnchor="end"
-                  height={100}
-                />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="amount" fill="#8884d8" />
-              </BarChart>
-            </ResponsiveContainer>
+            {ingredientData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={ingredientData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="name" 
+                    angle={-45}
+                    textAnchor="end"
+                    height={100}
+                  />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="amount" fill="#8884d8" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 4 }}>
+                食材の生産がありませんでした
+              </Typography>
+            )}
           </Paper>
         </Grid>
 
@@ -129,25 +137,31 @@ const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) => {
             <Typography variant="h6" gutterBottom>
               食材構成比
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={ingredientData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="amount"
-                >
-                  {ingredientData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {ingredientData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={ingredientData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="amount"
+                  >
+                    {ingredientData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 4 }}>
+                食材の生産がありませんでした
+              </Typography>
+            )}
           </Paper>
         </Grid>
 
@@ -158,20 +172,26 @@ const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) => {
               <Typography variant="h6" gutterBottom>
                 作成されたレシピ
               </Typography>
-              <Box display="flex" flexWrap="wrap" gap={1}>
-                {result.recipes_made.map((recipe, index) => (
-                  <Box key={index}>
-                    <Typography variant="body2" component="span">
-                      {recipe}
-                    </Typography>
-                    {index < result.recipes_made.length - 1 && (
-                      <Typography variant="body2" component="span" sx={{ mx: 1 }}>
-                        •
-                      </Typography>
-                    )}
-                  </Box>
-                ))}
-              </Box>
+              {Object.entries(result.recipes_made).filter(([recipeName, recipeData]) => (recipeData as any).count > 0).length > 0 ? (
+                <Box display="flex" flexWrap="wrap" gap={1}>
+                  {Object.entries(result.recipes_made)
+                    .filter(([recipeName, recipeData]) => (recipeData as any).count > 0)
+                    .map(([recipeName, recipeData], index) => (
+                      <Box key={recipeName} sx={{ mb: 1 }}>
+                        <Typography variant="body2" component="span">
+                          {recipeName}: {(recipeData as any).count || 0}回
+                        </Typography>
+                        <Typography variant="body2" component="span" color="textSecondary" sx={{ ml: 1 }}>
+                          (エナジー: {(recipeData as any).energy || 0})
+                        </Typography>
+                      </Box>
+                    ))}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="textSecondary">
+                  レシピは作成されませんでした（必要な食材が不足しています）
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>

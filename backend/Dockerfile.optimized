@@ -39,7 +39,7 @@ WORKDIR /app
 COPY --from=dependencies /root/.local /home/appuser/.local
 
 # アプリケーションコードをコピー（所有権も設定）
-COPY --chown=appuser:appgroup *.py ./
+COPY --chown=appuser:appgroup . ./
 
 # 非rootユーザーに切り替え
 USER appuser
